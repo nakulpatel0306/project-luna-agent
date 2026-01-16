@@ -1,0 +1,41 @@
+{
+  "name": "luma-desktop-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "local-first ai agent for development workflows",
+  "author": "nakul patel",
+  "license": "MIT",
+  "workspaces": [
+    "src/frontend"
+  ],
+  "scripts": {
+    "setup": "chmod +x setup_project_structure.sh && ./setup_project_structure.sh",
+    "frontend": "cd src/frontend && npm run tauri dev",
+    "backend": "cd src/backend && python main.py",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd src/frontend && npm test",
+    "test:backend": "cd src/backend && pytest",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd src/frontend && npm run lint",
+    "lint:backend": "cd src/backend && ruff check .",
+    "format": "npm run format:frontend && npm run format:backend",
+    "format:frontend": "cd src/frontend && npm run format",
+    "format:backend": "cd src/backend && black ."
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "automation",
+    "desktop",
+    "developer-tools",
+    "local-first"
+  ]
+}
