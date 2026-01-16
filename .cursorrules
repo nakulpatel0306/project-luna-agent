@@ -1,0 +1,28 @@
+this is the luna desktop agent project.
+
+code style:
+- use lowercase for all ui text
+- prefer functional components in react
+- use type hints in python
+- write clear, self-documenting code
+- add comments for complex logic
+
+architecture:
+- frontend: tauri + react + typescript
+- backend: python + fastapi
+- communication: ipc/http
+- local-first philosophy
+
+when writing code:
+- follow the project structure in README.md
+- reference project_luna_notion_structure.md for specs
+- write tests for new features
+- keep functions small and focused
+- prioritize safety and user control
+- always validate commands before execution
+
+project values:
+- privacy first (local execution by default)
+- transparency (show what will be executed)
+- safety (confirm dangerous operations)
+- simplicity (lowercase aesthetic, minimal ui)
