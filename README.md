@@ -1,4 +1,4 @@
-# 🌙 luna desktop agent
+# project luna desktop agent
 
 > democratize complex development workflows through natural language
 
