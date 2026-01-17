@@ -7,6 +7,7 @@ a spotlight-style ai agent that runs locally on your machine, making development
 ## what is luna?
 
 luna is a desktop ai agent that:
+
 - activates with a global hotkey (like spotlight)
 - understands natural language commands
 - executes complex tasks safely on your machine
@@ -33,6 +34,15 @@ luna is a desktop ai agent that:
 - [ ] spotlight ui
 - [ ] package manager integration
 
+## ✅ what's working now:
+
+- spotlight ui with modern design
+- backend command parsing (chrome, vscode, slack)
+- real command execution via subprocess
+- step-by-step progress display
+- output/error display for each step
+- safe + moderate + dangerous risk levels
+
 ## architecture
 
 ```
@@ -54,12 +64,14 @@ luna is a desktop ai agent that:
 ## tech stack
 
 **frontend**
+
 - tauri (rust + typescript)
 - react 18
 - tailwind css
 - zustand (state)
 
 **backend**
+
 - python 3.11+
 - fastapi
 - ollama (local llm)
@@ -165,24 +177,28 @@ contributions welcome! this project is in early stages.
 ## roadmap
 
 **phase 0: foundation** (weeks 1-2)
+
 - [x] project structure
 - [ ] tauri initialization
 - [ ] python backend boilerplate
 - [ ] basic ipc communication
 
 **phase 1: mvp** (weeks 3-6)
+
 - [ ] spotlight ui
 - [ ] basic agent (install commands)
 - [ ] package manager integration
 - [ ] safety validation
 
 **phase 2: intelligence** (weeks 7-10)
+
 - [ ] context awareness
 - [ ] task decomposition
 - [ ] learning system
 - [ ] command history
 
 **phase 3: advanced** (weeks 11-14)
+
 - [ ] vscode extension
 - [ ] git integration
 - [ ] docker management
