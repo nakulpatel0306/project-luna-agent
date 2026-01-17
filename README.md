@@ -1,221 +1,152 @@
-# 🌙 luna desktop agent
+# luna
 
-> democratize complex development workflows through natural language
+a local-first ai agent for development workflows. type natural language commands and luna executes them safely on your machine.
 
-a spotlight-style ai agent that runs locally on your machine, making development setup and system administration accessible to everyone.
+## what it does
 
-## what is luna?
-
-luna is a desktop ai agent that:
-
-- activates with a global hotkey (like spotlight)
-- understands natural language commands
-- executes complex tasks safely on your machine
-- works across mac, windows, and linux
-- keeps everything local-first for privacy
-
-### examples
+luna is a desktop app that lets you run development tasks using plain english:
 
 ```
-"install chrome and vscode"
-"setup python environment with django"
-"check why docker isn't running"
-"create a react project with typescript"
+"install chrome"
+"install vscode"
+"install slack"
+"check docker status"
 ```
 
-## status
+it parses your request, shows you the execution plan with risk levels, and runs the commands after confirmation.
 
-🚧 **under active development** - currently in phase 0 (foundation)
+## current status
 
-- [x] project structure
-- [ ] tauri frontend setup
-- [ ] python backend initialization
-- [ ] basic agent engine
-- [ ] spotlight ui
-- [ ] package manager integration
+**working features:**
 
-## ✅ what's working now:
-
-- spotlight ui with modern design
-- backend command parsing (chrome, vscode, slack)
+- spotlight-style ui for entering commands
+- command parsing via openai gpt-4o-mini (with hardcoded fallback)
+- execution plan display with step-by-step breakdown
+- risk level indicators (safe / moderate / dangerous)
 - real command execution via subprocess
-- step-by-step progress display
-- output/error display for each step
-- safe + moderate + dangerous risk levels
+- seamless sudo handling via macos native password dialog
+- output and error display per step
+- command safety validation (blocks destructive patterns)
 
-## architecture
+**supported commands (hardcoded fallback):**
 
-```
-┌─────────────────────────────┐
-│   tauri app (rust + react)  │
-│   - spotlight ui            │
-│   - safe execution layer    │
-└──────────┬──────────────────┘
-           │
-           ↓ ipc/http
-┌──────────────────────────────┐
-│   python backend             │
-│   - agent logic              │
-│   - llm integration          │
-│   - knowledge graph          │
-└──────────────────────────────┘
-```
+- `install chrome` - installs via homebrew
+- `install vscode` - installs via homebrew
+- `install slack` - installs via homebrew
+- `check docker status` - checks docker installation and status
+- `which <tool>` - checks if a tool is installed
+
+with an openai api key configured, any natural language command is supported.
 
 ## tech stack
 
-**frontend**
-
-- tauri (rust + typescript)
-- react 18
-- tailwind css
-- zustand (state)
-
-**backend**
-
-- python 3.11+
-- fastapi
-- ollama (local llm)
-- sqlite
+| layer | technology |
+|-------|------------|
+| desktop runtime | tauri 2.0 (rust) |
+| frontend | react 18, typescript |
+| styling | tailwind css |
+| icons | lucide-react |
+| backend | python 3.11+, fastapi |
+| llm | openai gpt-4o-mini |
 
 ## prerequisites
 
 - node.js 18+
 - rust / cargo
 - python 3.11+
-- ollama (optional, for local llm)
+- homebrew (for macos package installations)
 
-## getting started
+## quick start
 
-### 1. clone and setup
+### 1. backend setup
 
 ```bash
-cd luma-desktop-agent
+cd src/backend
 
-# run setup script
-chmod +x setup_project_structure.sh
-./setup_project_structure.sh
+# create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # windows: venv\Scripts\activate
+
+# install dependencies
+pip install fastapi uvicorn openai python-dotenv pydantic
+
+# create .env file
+echo "OPENAI_API_KEY=your_key_here" > .env
+
+# run backend
+python main.py
 ```
+
+the api runs at http://127.0.0.1:8000
 
 ### 2. frontend setup
 
 ```bash
 cd src/frontend
 
-# initialize tauri
-npm create tauri-app@latest . -- --manager npm
-
 # install dependencies
 npm install
-```
 
-### 3. backend setup
-
-```bash
-cd src/backend
-
-# create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # on windows: venv\Scripts\activate
-
-# install dependencies (coming soon)
-pip install -r requirements.txt
-```
-
-### 4. run development
-
-```bash
-# terminal 1 - backend
-cd src/backend
-source venv/bin/activate
-python main.py
-
-# terminal 2 - frontend
-cd src/frontend
+# run development server
 npm run tauri dev
 ```
+
+### 3. use luna
+
+1. type a command like "install chrome"
+2. review the execution plan
+3. click "execute" to run the steps
+4. view output/errors for each step
 
 ## project structure
 
 ```
 luma-desktop-agent/
 ├── src/
-│   ├── frontend/        # tauri + react app
+│   ├── frontend/           # tauri + react app
 │   │   ├── src/
 │   │   │   ├── components/
-│   │   │   ├── hooks/
-│   │   │   └── utils/
-│   │   └── src-tauri/   # rust backend
-│   ├── backend/         # python agent
-│   │   ├── agent/       # core agent logic
-│   │   ├── api/         # fastapi server
-│   │   ├── integrations/# package managers, etc
-│   │   └── knowledge/   # context system
-│   └── shared/          # shared types/models
-├── docs/                # documentation
-├── tests/               # test suite
-└── config/              # configuration files
+│   │   │   │   └── Spotlight.tsx   # main ui component
+│   │   │   ├── utils/
+│   │   │   │   └── api.ts          # backend api client
+│   │   │   ├── App.tsx
+│   │   │   └── main.tsx
+│   │   └── src-tauri/      # rust backend for tauri
+│   └── backend/            # python api server
+│       ├── main.py         # fastapi app + command parsing
+│       └── utils/
+│           └── executor.py # command execution + sudo handling
+├── docs/                   # documentation
+└── package.json            # root workspace config
 ```
 
-## contributing
+## documentation
 
-contributions welcome! this project is in early stages.
+- [architecture](docs/ARCHITECTURE.md) - technical design and data flow
+- [setup guide](docs/SETUP.md) - detailed installation instructions
+- [usage guide](docs/USAGE.md) - how to use luna
+- [api reference](docs/API.md) - backend api documentation
 
-### development workflow
+## how it works
 
-1. create a branch for your feature
-2. make changes with descriptive commits
-3. test thoroughly (all platforms if possible)
-4. submit pr with clear description
+1. **user input** - you type a natural language command in the spotlight ui
+2. **parsing** - backend sends your command to gpt-4o-mini (or uses hardcoded parser)
+3. **plan generation** - llm returns structured steps with commands and risk levels
+4. **confirmation** - ui displays the plan for your approval
+5. **execution** - steps run sequentially with real-time status updates
+6. **sudo handling** - if needed, macos shows native password dialog (credentials cached for ~5 min)
 
-### code style
+## limitations
 
-- **lowercase aesthetic** - all ui text lowercase
-- **type safe** - typescript for frontend, type hints for python
-- **tested** - unit tests for core functionality
-- **documented** - clear comments and docs
-
-## roadmap
-
-**phase 0: foundation** (weeks 1-2)
-
-- [x] project structure
-- [ ] tauri initialization
-- [ ] python backend boilerplate
-- [ ] basic ipc communication
-
-**phase 1: mvp** (weeks 3-6)
-
-- [ ] spotlight ui
-- [ ] basic agent (install commands)
-- [ ] package manager integration
-- [ ] safety validation
-
-**phase 2: intelligence** (weeks 7-10)
-
-- [ ] context awareness
-- [ ] task decomposition
-- [ ] learning system
-- [ ] command history
-
-**phase 3: advanced** (weeks 11-14)
-
-- [ ] vscode extension
-- [ ] git integration
-- [ ] docker management
-- [ ] cloud sync (optional)
-
-see [project_luna_notion_structure.md](./project_luna_notion_structure.md) for detailed specs.
+- macos only (sudo handling uses osascript)
+- requires homebrew for package installations
+- llm features require openai api key
+- no global hotkey yet (app must be focused)
 
 ## license
 
-mit (to be finalized)
+mit
 
-## contact
+## author
 
-- project lead: nakul patel
-- issues: [github issues](https://github.com/yourusername/luma-desktop-agent/issues)
-- discussions: [github discussions](https://github.com/yourusername/luma-desktop-agent/discussions)
-
----
-
-built with ❤️ for developers who hate repetitive setup tasks
+nakul patel

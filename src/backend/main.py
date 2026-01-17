@@ -8,7 +8,17 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal, Dict, Any
 import uvicorn
 import platform
+import os
+import json
+from dotenv import load_dotenv
+from openai import OpenAI
 from utils.executor import execute_command as run_command, check_tool_installed
+
+# load environment variables
+load_dotenv()
+
+# initialize openai client
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(
     title="luna agent api",
@@ -68,16 +78,119 @@ class ExecuteAllResponse(BaseModel):
     overall_status: Literal["completed", "failed", "partial"]
 
 
-def parse_command(command: str) -> ExecuteResponse:
+def parse_command_with_llm(command: str, os_type: str) -> ExecuteResponse:
     """
-    basic command parser - will be replaced with llm later
+    use llm to parse any command and generate execution steps
+    """
+    
+    # detect available package managers
+    available_package_managers = []
+    if check_tool_installed("brew"):
+        available_package_managers.append("homebrew")
+    if check_tool_installed("apt-get"):
+        available_package_managers.append("apt")
+    if check_tool_installed("choco"):
+        available_package_managers.append("chocolatey")
+    if check_tool_installed("npm"):
+        available_package_managers.append("npm")
+    if check_tool_installed("pip"):
+        available_package_managers.append("pip")
+    
+    system_prompt = f"""you are luna, an AI agent that generates shell commands for development workflows.
+
+CONTEXT:
+- os: {os_type}
+- package managers: {', '.join(available_package_managers) if available_package_managers else 'none detected'}
+- sudo is handled automatically via native dialog (no terminal prompts)
+- all commands run non-interactively (no user input required during execution)
+
+TASK: convert the user request into executable shell commands.
+
+RULES:
+1. generate atomic, directly-executable shell commands
+2. risk levels: "safe" (read-only), "moderate" (installs), "dangerous" (sudo/delete)
+3. add verification steps when useful (e.g., check if installed after install)
+4. use the appropriate package manager for the os
+
+COMMAND SYNTAX - CRITICAL:
+✓ CORRECT: curl -fsSL https://example.com/install.sh | bash
+✗ WRONG: /bin/bash -c '$(curl -fsSL https://example.com/install.sh)'
+✗ WRONG: $(curl ...) or backtick command substitution
+
+✓ CORRECT: brew install package
+✓ CORRECT: which brew
+✓ CORRECT: sudo apt-get install -y package
+
+ALWAYS use -y or equivalent for package installs (non-interactive).
+NEVER use interactive flags like -i, --interactive, or expect user input.
+pipe to bash directly for install scripts: curl url | bash
+
+respond with JSON only:
+{{
+  "task_id": "unique_id",
+  "steps": [
+    {{"id": 1, "description": "what this does", "command": "shell command", "risk": "safe|moderate|dangerous"}}
+  ],
+  "requires_confirmation": true,
+  "estimated_time": "time estimate"
+}}"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",  # faster and cheaper
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": command}
+            ],
+            temperature=0.3,
+            max_tokens=1000
+        )
+        
+        # parse the response
+        response_text = response.choices[0].message.content.strip()
+        
+        # remove markdown code blocks if present
+        if response_text.startswith("```"):
+            response_text = response_text.split("```")[1]
+            if response_text.startswith("json"):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+        
+        parsed = json.loads(response_text)
+        
+        # convert to our response model
+        steps = [
+            ExecuteStep(
+                id=step["id"],
+                description=step["description"],
+                command=step["command"],
+                risk=step["risk"]
+            )
+            for step in parsed["steps"]
+        ]
+        
+        return ExecuteResponse(
+            task_id=parsed.get("task_id", f"task_{hash(command)}"),
+            steps=steps,
+            requires_confirmation=parsed.get("requires_confirmation", True),
+            estimated_time=parsed.get("estimated_time", "unknown")
+        )
+        
+    except Exception as e:
+        print(f"❌ llm parsing failed: {e}")
+        # fallback to hardcoded parser
+        return parse_command_hardcoded(command, os_type)
+
+
+def parse_command_hardcoded(command: str, os_type: str) -> ExecuteResponse:
+    """
+    fallback hardcoded parser
     """
     command_lower = command.lower().strip()
-    os_type = platform.system().lower()
     
     # detect "install chrome" command
     if "install" in command_lower and "chrome" in command_lower:
-        if os_type == "darwin":  # macOS
+        if os_type == "darwin":
             return ExecuteResponse(
                 task_id="task_001",
                 steps=[
@@ -98,52 +211,6 @@ def parse_command(command: str) -> ExecuteResponse:
                         description="verify installation",
                         command="ls -la /Applications/Google\\ Chrome.app",
                         risk="safe"
-                    )
-                ],
-                requires_confirmation=True,
-                estimated_time="2-3 minutes"
-            )
-        elif os_type == "linux":
-            return ExecuteResponse(
-                task_id="task_001",
-                steps=[
-                    ExecuteStep(
-                        id=1,
-                        description="download google chrome",
-                        command="wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
-                        risk="safe"
-                    ),
-                    ExecuteStep(
-                        id=2,
-                        description="install google chrome",
-                        command="sudo dpkg -i google-chrome-stable_current_amd64.deb",
-                        risk="dangerous"
-                    ),
-                    ExecuteStep(
-                        id=3,
-                        description="fix dependencies",
-                        command="sudo apt-get install -f -y",
-                        risk="moderate"
-                    )
-                ],
-                requires_confirmation=True,
-                estimated_time="3-5 minutes"
-            )
-        elif os_type == "windows":
-            return ExecuteResponse(
-                task_id="task_001",
-                steps=[
-                    ExecuteStep(
-                        id=1,
-                        description="check if chocolatey is installed",
-                        command="choco --version",
-                        risk="safe"
-                    ),
-                    ExecuteStep(
-                        id=2,
-                        description="install google chrome",
-                        command="choco install googlechrome -y",
-                        risk="moderate"
                     )
                 ],
                 requires_confirmation=True,
@@ -177,26 +244,6 @@ def parse_command(command: str) -> ExecuteResponse:
                 ],
                 requires_confirmation=True,
                 estimated_time="2-3 minutes"
-            )
-        elif os_type == "linux":
-            return ExecuteResponse(
-                task_id="task_002",
-                steps=[
-                    ExecuteStep(
-                        id=1,
-                        description="add microsoft repository",
-                        command="wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg",
-                        risk="moderate"
-                    ),
-                    ExecuteStep(
-                        id=2,
-                        description="install vscode",
-                        command="sudo apt-get install code",
-                        risk="moderate"
-                    )
-                ],
-                requires_confirmation=True,
-                estimated_time="3-5 minutes"
             )
     
     # detect "check docker" command
@@ -255,22 +302,8 @@ def parse_command(command: str) -> ExecuteResponse:
                 requires_confirmation=True,
                 estimated_time="2-3 minutes"
             )
-        elif os_type == "linux":
-            return ExecuteResponse(
-                task_id="task_slack",
-                steps=[
-                    ExecuteStep(
-                        id=1,
-                        description="install slack via snap",
-                        command="sudo snap install slack --classic",
-                        risk="moderate"
-                    )
-                ],
-                requires_confirmation=True,
-                estimated_time="2-3 minutes"
-            )
     
-    # detect "which brew" or similar check commands
+    # detect "which" or similar check commands
     elif "which" in command_lower or "where" in command_lower:
         tool = command_lower.split()[-1] if len(command_lower.split()) > 1 else "unknown"
         return ExecuteResponse(
@@ -294,7 +327,7 @@ def parse_command(command: str) -> ExecuteResponse:
             ExecuteStep(
                 id=1,
                 description=f"command not recognized: {command}",
-                command="echo 'unknown command'",
+                command="echo 'unknown command - no openai api key configured'",
                 risk="safe",
                 status="failed"
             )
@@ -302,6 +335,26 @@ def parse_command(command: str) -> ExecuteResponse:
         requires_confirmation=False,
         estimated_time="0 seconds"
     )
+
+
+def parse_command(command: str) -> ExecuteResponse:
+    """
+    main entry point - try llm first, fallback to hardcoded
+    """
+    os_type = platform.system().lower()
+    
+    # check if openai api key is available
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key and api_key != "your_openai_api_key_here":
+        try:
+            print(f"🤖 parsing with llm: {command}")
+            return parse_command_with_llm(command, os_type)
+        except Exception as e:
+            print(f"⚠️  llm failed, using fallback: {e}")
+            return parse_command_hardcoded(command, os_type)
+    else:
+        print("⚠️  no openai api key, using hardcoded parser")
+        return parse_command_hardcoded(command, os_type)
 
 
 @app.get("/")
@@ -317,12 +370,15 @@ async def root():
 @app.get("/health")
 async def health():
     """detailed health check"""
+    has_api_key = bool(os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY") != "your_openai_api_key_here")
+    
     return {
         "status": "healthy",
         "services": {
             "api": "ok",
             "os": platform.system(),
-            "python": platform.python_version()
+            "python": platform.python_version(),
+            "llm": "enabled" if has_api_key else "disabled (using fallback parser)"
         }
     }
 
@@ -353,14 +409,14 @@ async def execute_all_steps(request: ExecuteAllRequest):
         
         print(f"🔄 executing step {step_id}: {command}")
         
-        # execute the command
+        # execute the command (sudo is handled seamlessly via macOS dialog if needed)
         success, stdout, stderr = run_command(command, timeout=300)
         
         print(f"{'✅' if success else '❌'} step {step_id}: {'completed' if success else 'failed'}")
         if stdout:
-            print(f"   stdout: {stdout[:100]}...")
+            print(f"   stdout: {stdout[:200]}...")
         if stderr:
-            print(f"   stderr: {stderr[:100]}...")
+            print(f"   stderr: {stderr[:200]}...")
         
         results.append(
             StepResult(
@@ -397,6 +453,13 @@ if __name__ == "__main__":
     print("🌙 starting luna backend...")
     print("📍 api docs: http://127.0.0.1:8000/docs")
     print(f"💻 os: {platform.system()}")
+    
+    # check api key status
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key and api_key != "your_openai_api_key_here":
+        print("🤖 llm: enabled (gpt-4o-mini)")
+    else:
+        print("⚠️  llm: disabled (add OPENAI_API_KEY to .env)")
     
     uvicorn.run(
         "main:app",
